@@ -1,2 +1,10 @@
 .idea
 *.pyc
+*.png
+*.jpg
+pretrained_models/*
+new_pretrained/*
+*.h5
+dgan_env/*
+fpn/*
+doc_images/*
