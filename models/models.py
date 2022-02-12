@@ -1,6 +1,8 @@
 import numpy as np
+import torch
 import torch.nn as nn
 from skimage.metrics import structural_similarity as SSIM
+
 from util.metrics import PSNR
 
 
@@ -12,8 +14,13 @@ class DeblurModel(nn.Module):
         img = data['a']
         inputs = img
         targets = data['b']
-        inputs, targets = inputs.cuda(), targets.cuda()
-        return inputs, targets
+        #inputs, targets = inputs.cuda(), targets.cuda()
+        return self.array_to_batch(inputs), self.array_to_batch(targets)
+
+    def array_to_batch(self, x):
+        #x = np.transpose(x, (2, 0, 1))
+        x = np.expand_dims(x, 0)
+        return torch.from_numpy(x).cuda()
 
     def tensor2im(self, image_tensor, imtype=np.uint8):
         image_numpy = image_tensor[0].cpu().float().numpy()

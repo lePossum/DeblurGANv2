@@ -1,5 +1,4 @@
 import logging
-import os
 from functools import partial
 
 import cv2
@@ -15,25 +14,25 @@ from dataset import PairedDataset
 from metric_counter import MetricCounter
 from models.losses import get_loss
 from models.models import get_model
-from models.networks import get_nets
+from models.networks import get_nets, get_generator
 from schedulers import LinearDecay, WarmRestart
-from fire import Fire
 
 cv2.setNumThreads(0)
 
 
 class Trainer:
-    def __init__(self, config, train: DataLoader, val: DataLoader):
+    def __init__(self, config, train: DataLoader, val: DataLoader, weights_path: str):
         self.config = config
         self.train_dataset = train
         self.val_dataset = val
+        self.weights_path = weights_path
         self.adv_lambda = config['model']['adv_lambda']
         self.metric_counter = MetricCounter(config['experiment_desc'])
         self.warmup_epochs = config['warmup_num']
 
     def train(self):
-        self._init_params()
-        for epoch in range(0, self.config['num_epochs']):
+        self._init_params(weights_path)
+        for epoch in range(0, config['num_epochs']):
             if (epoch == self.warmup_epochs) and not (self.warmup_epochs == 0):
                 self.netG.module.unfreeze()
                 self.optimizer_G = self._get_optim(self.netG.parameters())
@@ -59,8 +58,9 @@ class Trainer:
         for param_group in self.optimizer_G.param_groups:
             lr = param_group['lr']
 
-        epoch_size = self.config.get('train_batches_per_epoch') or len(self.train_dataset)
-        tq = tqdm.tqdm(self.train_dataset, total=epoch_size)
+        epoch_size = config.get('train_batches_per_epoch') or len(self.train_dataset)
+        #tq = tqdm.tqdm(self.train_dataset, total=epoch_size)
+        tq = tqdm.tqdm(self.train_dataset.dataset, total=epoch_size)
         tq.set_description('Epoch {}, lr {}'.format(epoch, lr))
         i = 0
         for data in tq:
@@ -87,16 +87,16 @@ class Trainer:
 
     def _validate(self, epoch):
         self.metric_counter.clear()
-        epoch_size = self.config.get('val_batches_per_epoch') or len(self.val_dataset)
-        tq = tqdm.tqdm(self.val_dataset, total=epoch_size)
+        epoch_size = config.get('val_batches_per_epoch') or len(self.val_dataset)
+        #tq = tqdm.tqdm(self.val_dataset, total=epoch_size)
+        tq = tqdm.tqdm(self.val_dataset.dataset, total=epoch_size)
         tq.set_description('Validation')
         i = 0
         for data in tq:
             inputs, targets = self.model.get_input(data)
-            with torch.no_grad():
-                outputs = self.netG(inputs)
-                loss_content = self.criterionG(outputs, targets)
-                loss_adv = self.adv_trainer.loss_g(outputs, targets)
+            outputs = self.netG(inputs)
+            loss_content = self.criterionG(outputs, targets)
+            loss_adv = self.adv_trainer.loss_g(outputs, targets)
             loss_G = loss_content + self.adv_lambda * loss_adv
             self.metric_counter.add_losses(loss_G.item(), loss_content.item())
             curr_psnr, curr_ssim, img_for_vis = self.model.get_images_and_metrics(inputs, outputs, targets)
@@ -158,9 +158,10 @@ class Trainer:
         else:
             raise ValueError("Discriminator Network [%s] not recognized." % d_name)
 
-    def _init_params(self):
+    def _init_params(self, weights_path: str):
         self.criterionG, criterionD = get_loss(self.config['model'])
         self.netG, netD = get_nets(self.config['model'])
+        self.netG.load_state_dict(torch.load(weights_path)['model'])
         self.netG.cuda()
         self.adv_trainer = self._get_adversarial_trainer(self.config['model']['d_name'], netD, criterionD)
         self.model = get_model(self.config['model'])
@@ -170,22 +171,16 @@ class Trainer:
         self.scheduler_D = self._get_scheduler(self.optimizer_D)
 
 
-def main(config_path='config/config.yaml'):
-    with open(config_path, 'r') as f:
-        config = yaml.load(f, Loader=yaml.SafeLoader)
+if __name__ == '__main__':
+    with open('config/config.yaml', 'r') as f:
+        config = yaml.load(f)
 
     batch_size = config.pop('batch_size')
-    get_dataloader = partial(DataLoader,
-                             batch_size=batch_size,
-                             num_workers=0 if os.environ.get('DEBUG') else cpu_count(),
-                             shuffle=True, drop_last=True)
+    get_dataloader = partial(DataLoader, batch_size=batch_size, num_workers=cpu_count(), shuffle=True, drop_last=True)
 
     datasets = map(config.pop, ('train', 'val'))
     datasets = map(PairedDataset.from_config, datasets)
     train, val = map(get_dataloader, datasets)
-    trainer = Trainer(config, train=train, val=val)
+    weights_path='pretrained_models/fpn_inception.h5'
+    trainer = Trainer(config, train=train, val=val, weights_path=weights_path)
     trainer.train()
-
-
-if __name__ == '__main__':
-    Fire(main)

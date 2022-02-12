@@ -90,8 +90,11 @@ def process_video(pairs, predictor, output_dir):
 
 def main(img_pattern: str,
          mask_pattern: Optional[str] = None,
-         weights_path='best_fpn.h5',
-         out_dir='submit/',
+        #  weights_path='./pretrained_models/best_fpn_l11.h5',
+        #  weights_path='./pretrained_models/last_fpn_l11.h5',
+        #  weights_path='./best_fpn.h5',
+         weights_path='./pretrained_models/best_fpn_l11.h5',
+         out_dir='../Diploma/result/bn_val_6/',
          side_by_side: bool = False,
          video: bool = False):
     def sorted_glob(pattern):
@@ -99,6 +102,7 @@ def main(img_pattern: str,
 
     imgs = sorted_glob(img_pattern)
     masks = sorted_glob(mask_pattern) if mask_pattern is not None else [None for _ in imgs]
+    print("MASK HERE : ", img_pattern, mask_pattern)
     pairs = zip(imgs, masks)
     names = sorted([os.path.basename(x) for x in glob(img_pattern)])
     predictor = Predictor(weights_path=weights_path)
@@ -118,7 +122,6 @@ def main(img_pattern: str,
                         pred)
     else:
         process_video(pairs, predictor, out_dir)
-
 
 if __name__ == '__main__':
     Fire(main)
