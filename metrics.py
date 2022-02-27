@@ -41,3 +41,11 @@ def calc_metrics(predicted_dir, target_dir, list_len = None):
     metrics['PSNR'] /= l
     metrics['SSIM'] /= l
     return metrics
+
+def mm(img):
+    print ("Image min : " ,img.min() , ", max : " , img.max())
+
+def norm(img):
+    im = img-img.min()
+    im /= im.max()
+    return im
