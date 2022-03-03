@@ -161,7 +161,7 @@ class Trainer:
     def _init_params(self, weights_path: str):
         self.criterionG, criterionD = get_loss(self.config['model'])
         self.netG, netD = get_nets(self.config['model'])
-        self.netG.load_state_dict(torch.load(weights_path)['model'])
+        # self.netG.load_state_dict(torch.load(weights_path)['model'])
         self.netG.cuda()
         self.adv_trainer = self._get_adversarial_trainer(self.config['model']['d_name'], netD, criterionD)
         self.model = get_model(self.config['model'])

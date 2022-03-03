@@ -22,20 +22,21 @@ def rotate_directory(directory_to_rotate, where_to_save_pickle='angles.pickle', 
     make_directory(where_to_save_imgs)
     for fname in fnames:
         cur_fname = os.path.join(directory_to_rotate, fname)
-        try:
-            orig_img = plt.imread(cur_fname)
-            img = rgb2gray(orig_img)
-            c = Cepstrum(img, batch_size=256, step=0.5)
-            a = get_common_ker_len_angle(c.kernels)[1]
-            angles.append((a, img.shape))
+        # try:
+        orig_img = plt.imread(cur_fname)
+        img = rgb2gray(orig_img)
+        c = Cepstrum(img, batch_size=256, step=0.5)
+        a = get_common_ker_len_angle(c.kernels)[1]
+        angles.append((a, img.shape))
 
-            rotated_img = ndimage.rotate(orig_img, - a * 180/math.pi)
-            # edge = (rotated_img.shape[0] - 600) // 2 + 1
-            # plt.imsave(local_save_dir + p, np.clip(rotated_img[edge:edge + 600, edge:edge + 600], 0., 1.))
-            plt.imsave(os.path.join(where_to_save_imgs, fname), np.clip(rotated_img, 0., 1.))
-            # plt.imsave(os.path.join(where_to_save_imgs, fname), rotated_img)
-        except Exception as e:
-            print('caught ex', str(e))
+        rotated_img = ndimage.rotate(orig_img, - a * 180/math.pi)
+        if rotated_img.shape[-1] == 4:
+            rotated_img[:,:,:,3] = 1
+        # print(rotated_img.shape, rotated_img)
+        # edge = (rotated_img.shape[0] - 600) // 2 + 1
+        plt.imsave(os.path.join(where_to_save_imgs, fname), np.clip(rotated_img, 0., 1.))
+        # except Exception as e:
+        #     print('caught ex', str(e))
 
     with open(where_to_save_pickle, 'wb') as f:
         pickle.dump(angles, f)

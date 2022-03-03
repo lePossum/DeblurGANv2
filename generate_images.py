@@ -16,9 +16,10 @@ from metrics import prepare_img1
 
 
 def convolve_img(image):
-    ker_len = 5
+    ker_len = 9
     pad = ker_len // 2
     ker = make_ker(ker_len, 0)
+    # ker = make_ker(ker_len, random.uniform(0, np.pi))
     img = image
     if len(img.shape) == 2:
         img = np.stack((image, image, image))
@@ -38,7 +39,6 @@ def process_image(path, idx_to_save, dir_to_save, amount_on_picture):
     try:
         cur_img = prepare_img1(imread(path))
         blurred = convolve_img(cur_img)
-        blurred = cur_img
         noised = random_noise(blurred, var=0.0001)
         h, w = cur_img.shape[:2]
 
@@ -46,9 +46,8 @@ def process_image(path, idx_to_save, dir_to_save, amount_on_picture):
             for idx in range(amount_on_picture):
                 y = random.randrange(h - IMG_SIZE)
                 x = random.randrange(w - IMG_SIZE)
-                print(idx_to_save)
-                plt.imsave(join(dir_to_save, 'blurred/') + 'img_' + str(idx_to_save) + '.png', noised[y : y + IMG_SIZE, x : x + IMG_SIZE])
-                plt.imsave(join(dir_to_save,   'sharp/') + 'img_' + str(idx_to_save) + '.png', cur_img[y : y + IMG_SIZE, x : x + IMG_SIZE])
+                plt.imsave(join(dir_to_save, 'blurred/') + 'img1_' + str(idx_to_save) + '.png', noised[y : y + IMG_SIZE, x : x + IMG_SIZE])
+                plt.imsave(join(dir_to_save,   'sharp/') + 'img1_' + str(idx_to_save) + '.png', cur_img[y : y + IMG_SIZE, x : x + IMG_SIZE])
         return
 
     except Exception as e: # work on python 2.x
@@ -82,13 +81,14 @@ def generate_pics(paths, dir_to_save = './', amount_on_picture = 1):
 def get_paths(directory):
     fnames = listdir(directory)
     fnames.sort()
-    return [(directory + item, idx) for (idx, item) in enumerate(fnames)]
+    return list([(directory + item, idx) for (idx, item) in enumerate(fnames)])[-25:]
+    # return np.random.permutation(list([(directory + item, idx) for (idx, item) in enumerate(fnames)])[-20:])
 
 
 def add_parser():
     parser = argparse.ArgumentParser(description='Generate images for neural network calculations')
 
-    parser.add_argument('dir_to_r', type=str, nargs='?', help='what directory to rotate')
+    parser.add_argument('dir_to_use', type=str, nargs='?', help='directory from to generate')
     parser.add_argument('to_save',  type=str, nargs='?', help='where to save')
 
     return parser.parse_args()
@@ -98,11 +98,9 @@ if __name__ == '__main__':
     
     ### global variables block  ###
     IMG_SIZE = 1000
-    BLUR_LEN = 5
-    KER = make_ker(BLUR_LEN, 0)
     random.seed(1337)
     ###                         ###
 
-    generate_pics(get_paths(args.dir_to_r), args.to_save, 1)
+    generate_pics(get_paths(args.dir_to_use), args.to_save, 1)
 
 

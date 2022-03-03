@@ -3,8 +3,8 @@ project: deblur_gan
 experiment_desc: fpn
 
 train:
-  files_a: &FILES_A ../../Stuff/Images/generated/l5a0/blurred/*.png
-  files_b: &FILES_B ../../Stuff/Images/generated/l5a0/sharp/*.png
+  files_a: &FILES_A ../../Stuff/Images/generated/march2/blurred/*.png
+  files_b: &FILES_B ../../Stuff/Images/generated/march2/sharp/*.png
   size: &SIZE 256
   crop: random
   preload: &PRELOAD false
@@ -52,17 +52,17 @@ model:
   norm_layer: instance
   dropout: True
 
-num_epochs: 10
+num_epochs: 50
 train_batches_per_epoch: 1000
-val_batches_per_epoch: 100
+val_batches_per_epoch: 10
 batch_size: 16
 image_size: [500, 500]
 
 optimizer:
   name: adam
-  lr: 0.00001
+  lr: 0.001
 scheduler:
   name: linear
-  start_epoch: 50
+  start_epoch: 20
   min_lr: 0.00001
 

@@ -28,15 +28,15 @@ def calc_metrics(predicted_dir, target_dir, list_len = None):
     metrics['SSIM'] = 0
     for idx in range(len(pred_files)):
         # print(pred_files[idx])
-        p = prepare_img1(imread(os.path.join(predicted_dir, pred_files[idx]))[:600, :600])
+        p = prepare_img1(imread(os.path.join(predicted_dir, pred_files[idx])))
         if (pred_files[idx] in targ_files):
             t = prepare_img1(imread(os.path.join(target_dir, pred_files[idx])))
-        try:
-            metrics['PSNR'] += PSNR(t,p)
-            metrics['SSIM'] += SSIM(t,p, multichannel=True)
-        except:
-            l -= 1
-            print('fovno')
+        # try:
+        metrics['PSNR'] += PSNR(t,p)
+        metrics['SSIM'] += SSIM(t,p, multichannel=True)
+        # except:
+        #     l -= 1
+        #     print('fovno')
 
     metrics['PSNR'] /= l
     metrics['SSIM'] /= l
