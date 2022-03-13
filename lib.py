@@ -14,6 +14,7 @@ def make_directory(dirname):
     if (not os.path.exists(dirname)):
         os.mkdir(dirname)
     return 
+
 def FixImage(image):
     '''
     Returns image with values in [0, 1] segment
@@ -38,11 +39,12 @@ def images_out(class_elem):
     plt.subplot(1,2,2)
     plt.imshow(FixImage(class_elem._init_image), cmap='gray')
 
-def save_img(class_elem, p='my_stuff.png', p_b='blurred.png'):
-    plt.imsave(p, class_elem._cur_image, cmap='gray')
-    plt.imsave(p_b, class_elem._init_image, cmap='gray')
+DEBUG = True
+temp_dir = 'temp/'
 
-DEBUG = False
+def save_img(class_elem, p='my_stuff.png', p_b='blurred.png', dir_to_save=temp_dir):
+    plt.imsave(os.path.join(dir_to_save, p),   class_elem._cur_image, cmap='gray')
+    plt.imsave(os.path.join(dir_to_save, p_b), class_elem._init_image, cmap='gray')
 
 def rgb2gray(rgb):
     r, g, b = rgb[:,:,0], rgb[:,:,1], rgb[:,:,2]
@@ -169,11 +171,15 @@ def make_ker(ker_len, ker_angle):
     else:
         for y in range(h):
             ker[y, ker_len] = 1 
-    ret_value = ker/ker.sum()
-    if np.isnan(np.sum(ret_value)):
-        return []
-    else:
+    if ker.sum() > 0:
+        ret_value = ker/ker.sum()
         return ret_value
+    else:
+        return []
+    # if np.isnan(np.sum(ret_value)):
+    #     return []
+    # else:
+    #     return ret_value
 
 def get_common_ker_len_angle(kers):
     max_shape = max([a[0] for a in kers])
@@ -183,16 +189,18 @@ def get_common_ker_len_angle(kers):
     return (int(np.mean(lenghts)), np.mean(angles))
 
 class Cepstrum:
-    def __init__(self, picture, batch_size=64, step=0.25):
+    def __init__(self, picture, batch_size=256, step=0.5, dir_to_save=temp_dir):
         gc.enable()
         self.batch_size = batch_size
         self.step = step
+        self.dir_to_save = dir_to_save
+        make_directory(dir_to_save)
         self.x_batches = int(picture.shape[1] // (batch_size * step) - 1)
         self.y_batches = int(picture.shape[0] // (batch_size * step) - 1)
         self.picture = copy.deepcopy(picture)
         self.squared_image = [0] * self.x_batches * self.y_batches
         self.MainProcess()
-        plt.imsave('orig_img.png', self.picture, cmap='gray')
+        plt.imsave(os.path.join(self.dir_to_save, 'orig_img.png'), self.picture, cmap='gray')
 
     def get_square(self):
         pixel_step = int(self.batch_size * self.step)
@@ -229,12 +237,9 @@ class Cepstrum:
             self.angle_value = 0
             print("Unable to calculate blur lengths")
             return
-        # self.kernels = np.reshape(self.kernels, (self.y_batches, self.x_batches, 2)) #here
         self.blur_len_value, self.angle_value = get_common_ker_len_angle(self.kernels)
         self.kernel_image = make_ker(self.blur_len_value, self.angle_value)
         self.squared_image = np.reshape(self.squared_image, (self.y_batches, self.x_batches, self.batch_size, self.batch_size))
-        # self.restore1() 
-#         self.restore() #here
         
     def MainProcess(self):
         self.ft_array()
@@ -270,46 +275,7 @@ class Cepstrum:
         out_pict[: batch_size//2, batch_size//2 :] = out_pict[batch_size//2 :, : batch_size//2]
         out_pict[batch_size//2 :, : batch_size//2] = temp_pict[:]
         return out_pict
-    
-    def restore(self):
-        self.cut_image = []
-        pixel_step = self.batch_size
-        self.y_squares = int(self.picture.shape[0] // self.batch_size)
-        self.x_squares = int(self.picture.shape[1] // self.batch_size)
-        for y in range(self.y_squares):
-            for x in range(self.x_squares):
-                square = self.picture[y * pixel_step : y * pixel_step + self.batch_size,
-                                   x * pixel_step : x * pixel_step + self.batch_size]
-                self.cut_image.append(square)
-        self.cut_image = np.reshape(self.cut_image, (self.y_squares, self.x_squares, pixel_step, pixel_step))
-        self.restored_image = np.copy(self.cut_image)
-
-        ker_divider = int(1. / self.step)
-        self.new_kernels = [[0] * self.x_squares] * self.y_squares
-        
-        def tf(y, x):
-            new_y = int((y if y >= 0 else 0) if y <= self.y_batches - 1 else self.y_batches - 1)
-            new_x = int((x if x >= 0 else 0) if x <= self.x_batches - 1 else self.x_batches - 1)
-            return (new_y, new_x)
-        
-        for y_orig in range(self.y_squares):
-            for x_orig in range(self.x_squares):
-                k_l = []
-                for y in range(-ker_divider + 1, ker_divider):
-                    for x in range(-ker_divider + 1, ker_divider):
-                        k_l.append(self.kernels[tf(y_orig * ker_divider + y, x_orig * ker_divider + x)])
-                
-                self.new_kernels[y_orig][x_orig] = make_ker(get_common_ker_len_angle(k_l))
-                print(y_orig, x_orig)
-                self.restored_image[y_orig, x_orig] =\
-                    self.restore_function(self.cut_image[y_orig, x_orig], self.new_kernels[y_orig][x_orig])
-        return self.restored_image
-    
-    def restore1(self):
-        self.deb_ker = make_common_ker(self.kernels)
-        plt.imsave(save_dir + filename[:-4] + '_ker_'+ str(c.batch_size) +'.png', self.deb_ker, cmap='gray')
-        self.restored_image_full = self.restore_function(self.picture, self.deb_ker)
-    
+ 
     def count_ft(self):
         self.cepstrum_picture = np.array(list(self.get_square()))
             
@@ -318,7 +284,7 @@ class Cepstrum:
         for y in range(self.y_batches):
             temp[y] = np.hstack(self.conc_cepstrum_picture[y, :, :, :])
         self.conc_cepstrum_picture = np.vstack(temp)
-        plt.imsave('big_img.png', self.conc_cepstrum_picture, cmap='gray')
+        plt.imsave(os.path.join(self.dir_to_save, 'big_img.png'), self.conc_cepstrum_picture, cmap='gray')
     
     def count_angles(self):
         self.weight = np.ndarray((self.y_batches * self.x_batches), dtype='float')
@@ -338,7 +304,7 @@ class Cepstrum:
                 for y in range(self.y_batches):
                     temp[y] = np.hstack(self.conc_lines_img[y, :, :, :])
                 self.conc_lines_img = np.vstack(temp)
-                plt.imsave('lines_img.png', self.conc_lines_img, cmap='gray')
+                plt.imsave(os.path.join(self.dir_to_save, 'lines_img.png'), self.conc_lines_img, cmap='gray')
             else:
                 self.blur_len[idx] = get_blur_len(q, self.angle[idx], self.weight[idx])
             
