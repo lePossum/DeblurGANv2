@@ -16,10 +16,11 @@ from metrics import prepare_img1
 
 
 def convolve_img(image):
-    ker_len = 9
+    # ker_len = 9
+    ker_len = random.randint(3, 19)
     pad = ker_len // 2
-    ker = make_ker(ker_len, 0)
-    # ker = make_ker(ker_len, random.uniform(0, np.pi))
+    # ker = make_ker(ker_len, 0)
+    ker = make_ker(ker_len, random.uniform(0, np.pi))
     img = image
     if len(img.shape) == 2:
         img = np.stack((image, image, image))
@@ -81,7 +82,7 @@ def generate_pics(paths, dir_to_save = './', amount_on_picture = 1):
 def get_paths(directory):
     fnames = listdir(directory)
     fnames.sort()
-    return list([(directory + item, idx) for (idx, item) in enumerate(fnames)])[-25:]
+    return list([(directory + item, idx) for (idx, item) in enumerate(fnames)])[:3000]
     # return np.random.permutation(list([(directory + item, idx) for (idx, item) in enumerate(fnames)])[-20:])
 
 

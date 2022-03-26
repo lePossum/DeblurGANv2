@@ -1,3 +1,4 @@
+from cv2 import rotate
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.signal as ss
@@ -25,7 +26,7 @@ def FixImage(image):
     if min_value < 0:
         image -= min_value
     return image / (max_value - min_value)
-        
+
 def images_out(class_elem):
     '''
     Relatively normal output 
@@ -95,28 +96,40 @@ def wiener_filter(img, kernel, K=1):
     dummy = np.abs(np.fft.ifft2(dummy))
     return dummy
 
-def get_blur_len(img, angle, weight, w=1):
-    rotated_img = ndimage.rotate(img, -angle * 180/math.pi)
-    rotated_img[rotated_img < 4/255 * rotated_img.max()] = 0
-    r = radon(rotated_img, theta=[90], circle=False)
-    r[r > 0.6 * r.max()] = 0
-    r *= 1./max(r)
+def get_blur_len(img, angle, weight, w=2):
+    img[img == img.max()] = 0
+    img[img < 0.7 * img.max()] = 0
+    cur_img = FixImage(img)
+    rotated_img = ndimage.rotate(cur_img, -angle * 180/math.pi)
     blur_len = 0
-    for i in range(len(r)):
-        if (r[i] > 0.7):
-            blur_len = len(r) // 2 - 1 - i 
-#             if (blur_len > 2 * img.shape[0] // 5):
-#                 blur_len = 0
+    max_val = rotated_img[rotated_img.shape[0] // 2 - w : rotated_img.shape[0] // 2 + w].max(axis=0)
+    wid = rotated_img.shape[1] // 2
+    for i in range(wid):
+        if (max_val[i] > 0.05):
+            blur_len = wid - i
             break
-    
+    # rotated_img[rotated_img < 4/255 * rotated_img.max()] = 0
+#     r = radon(rotated_img, theta=[90], circle=False)
+#     r[r > 0.6 * r.max()] = 0
+#     r *= 1./max(r)
+#     for i in range(len(r)):
+#         if (r[i] > 0.7):
+#             blur_len = len(r) // 2 - 1 - i 
+# #             if (blur_len > 2 * img.shape[0] // 5):
+# #                 blur_len = 0
+#             break
+    global counter
+    plt.imsave('temp/' + str(counter) + 'rotated_ceps.png', rotated_img)
+    counter += 1
     if (DEBUG):
         h = img.shape[0]
         q = h // 2 - 1
         k = -math.tan(angle)
         b = (1 - k) * q
+        new_blur_len = blur_len * 6
         l = []
         if abs(abs(angle * 180/math.pi) - 90) > 10:
-            for old_x in range(q - blur_len, q + blur_len):
+            for old_x in range(q - new_blur_len, q + new_blur_len):
                 old_y = round(k * old_x+b)
                 old_y = int((old_y if old_y >= 0 else 0) if old_y <= h-1 else h-1)
                 if (old_y <= 1 or old_y >= h-2 or old_x <= 1 or old_x >= h-2):
@@ -132,7 +145,7 @@ def get_blur_len(img, angle, weight, w=1):
                         if (y, x) not in l:
                             l.append((y, x))
         else:
-            for y in range(q - blur_len, q + blur_len):
+            for y in range(q - new_blur_len, q + new_blur_len):
                 for i in range(-w, w+1):
                     if (y, q + i) not in l:
                         l.append((y, q + i))
@@ -186,7 +199,7 @@ def get_common_ker_len_angle(kers):
     lenghts = [a[0] for a in kers]
     angles =  [a[1] for a in kers]
     
-    return (int(np.mean(lenghts)), np.mean(angles))
+    return (int(np.median(lenghts)), int(np.median(angles)))
 
 class Cepstrum:
     def __init__(self, picture, batch_size=256, step=0.5, dir_to_save=temp_dir):
@@ -209,7 +222,9 @@ class Cepstrum:
                 square = self.picture[y * pixel_step : y * pixel_step + self.batch_size,
                                    x * pixel_step : x * pixel_step + self.batch_size]
                 self.squared_image[y * self.x_batches + x] = square
-                yield self.swap_quarters(Cepstrum.calculate_cepstrum(square))
+                orig_ceps = Cepstrum.calculate_cepstrum(square)
+                self.orig_cepstrums.append(self.swap_quarters(orig_ceps))
+                yield self.swap_quarters(Cepstrum.get_k_bit_plane(orig_ceps))
 
     def ft_array(self):
         # CALCULATE CEPSTRUMS
@@ -230,7 +245,7 @@ class Cepstrum:
             print("Counted kernels: ", time.time() - t)
         
         self.weight = self.weight.reshape((self.y_batches, self.x_batches))
-        self.weight /= self.weight.max()
+
         self.angle = self.angle.reshape((self.y_batches, self.x_batches))
         self.blur_len = self.blur_len.reshape((self.y_batches, self.x_batches))
         if (np.max(self.blur_len) == 0) :
@@ -257,14 +272,26 @@ class Cepstrum:
         bw2d = bw2d * bw2d.T
         return picture * bw2d
     
-    def calculate_cepstrum(picture,threshold=0.5):
+    def calculate_cepstrum(picture, threshold=0.5):
         log = np.log(1 + np.abs(np.fft.fft2(Cepstrum.hamming(picture))))
         fourier_abs = np.abs(np.fft.ifft2(log))
-        fourier_abs[fourier_abs >= threshold * fourier_abs.max()] = 0
-        fourier_abs[fourier_abs >= threshold * fourier_abs.max()] = 0
+        # fourier_abs[fourier_abs >= threshold * fourier_abs.max()] = 0
+        # fourier_abs[fourier_abs >= threshold * fourier_abs.max()] = 0
         
         return fourier_abs
     
+    def get_k_bit_plane(img, k_list = [4, 5], width=8):
+        lst = []
+        img = (FixImage(img) * 255).astype(int)
+        for i in range(img.shape[0]):
+            for j in range(img.shape[1]):
+                lst.append(np.binary_repr(img[i][j], width=width)) # width = no. of bits
+        out_img = np.zeros_like(img)
+        for k in k_list:
+            assert(k <= width)
+            out_img += (np.array([int(i[k]) for i in lst],dtype = np.uint8) * 2**(width-k)).reshape(img.shape[0],img.shape[1])
+        return out_img
+
     def swap_quarters(self, picture):
         out_pict = copy.deepcopy(picture)
         batch_size = picture.shape[0]
@@ -275,10 +302,11 @@ class Cepstrum:
         out_pict[: batch_size//2, batch_size//2 :] = out_pict[batch_size//2 :, : batch_size//2]
         out_pict[batch_size//2 :, : batch_size//2] = temp_pict[:]
         return out_pict
- 
+    
+
     def count_ft(self):
+        self.orig_cepstrums = list()
         self.cepstrum_picture = np.array(list(self.get_square()))
-            
         self.conc_cepstrum_picture = self.cepstrum_picture.reshape((self.y_batches, self.x_batches, self.batch_size, self.batch_size))
         temp  = [ 0 ] * self.y_batches
         for y in range(self.y_batches):
@@ -290,13 +318,14 @@ class Cepstrum:
         self.weight = np.ndarray((self.y_batches * self.x_batches), dtype='float')
         self.angle = np.ndarray((self.y_batches * self.x_batches), dtype='float')
         if (DEBUG):
-            self.lines_img = np.copy(self.cepstrum_picture)
+            self.lines_img = np.zeros_like(self.cepstrum_picture, dtype=float)
         for idx, q in enumerate(self.cepstrum_picture):
             self.weight[idx], self.angle[idx] = find_best_line(q)
+        self.weight /= self.weight.max()
                 
     def count_lengths(self):
         self.blur_len = np.ndarray((self.y_batches * self.x_batches), dtype='int')
-        for idx, q in enumerate(self.cepstrum_picture):
+        for idx, q in enumerate(self.orig_cepstrums):
             if (DEBUG): 
                 self.blur_len[idx], self.lines_img[idx] = get_blur_len(q, self.angle[idx], self.weight[idx])
                 self.conc_lines_img = self.lines_img.reshape((self.y_batches, self.x_batches, self.batch_size, self.batch_size))

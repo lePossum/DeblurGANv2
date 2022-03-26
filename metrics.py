@@ -7,6 +7,7 @@ import copy
 import numpy as np
 from skimage import img_as_float
 import os
+import random
 
 def prepare_img1(img):
     image = copy.copy(img)
@@ -27,10 +28,16 @@ def calc_metrics(predicted_dir, target_dir, list_len = None):
     metrics['PSNR'] = 0
     metrics['SSIM'] = 0
     for idx in range(len(pred_files)):
-        # print(pred_files[idx])
         p = prepare_img1(imread(os.path.join(predicted_dir, pred_files[idx])))
+
+        y_size = int(0.8 * (p.shape[0]))
+        x_size = int(0.8 * (p.shape[1]))
+        y = random.randrange(p.shape[0] - y_size)
+        x = random.randrange(p.shape[1] - x_size)
+        
+        p = p[y : y + y_size, x : x + x_size]
         if (pred_files[idx] in targ_files):
-            t = prepare_img1(imread(os.path.join(target_dir, pred_files[idx])))
+            t = prepare_img1(imread(os.path.join(target_dir, pred_files[idx])))[y : y + y_size, x : x + x_size]
         # try:
         metrics['PSNR'] += PSNR(t,p)
         metrics['SSIM'] += SSIM(t,p, multichannel=True)
