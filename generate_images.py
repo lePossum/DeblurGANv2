@@ -15,13 +15,15 @@ from lib import *
 from metrics import prepare_img1
 
 
-def convolve_img(image):
-    # ker_len = 9
-    ker_len = random.randint(3, 19)
-    pad = ker_len // 2
+def convolve_img(image, args):
+    # ker_len = args.len
+    # ker_len = random.randint(3, 19)
     # ker = make_ker(ker_len, 0)
-    ker = make_ker(ker_len, random.uniform(0, np.pi))
+    ker_len = args.len
+    ker_angle = args.angle
+    ker = make_ker(ker_len, ker_angle)
     img = image
+    pad = ker_len // 2
     if len(img.shape) == 2:
         img = np.stack((image, image, image))
         img = np.transpose(image, axes=(1,2, 0))
@@ -36,10 +38,10 @@ def convolve_img(image):
     image = np.transpose(image, axes=(1,2, 0))
     return image
 
-def process_image(path, idx_to_save, dir_to_save, amount_on_picture):
-    try:
+def process_image(path, idx_to_save, args, amount_on_picture):
+    # try:
         cur_img = prepare_img1(imread(path))
-        blurred = convolve_img(cur_img)
+        blurred = convolve_img(cur_img, args)
         noised = random_noise(blurred, var=0.0001)
         h, w = cur_img.shape[:2]
 
@@ -47,12 +49,12 @@ def process_image(path, idx_to_save, dir_to_save, amount_on_picture):
             for idx in range(amount_on_picture):
                 y = random.randrange(h - IMG_SIZE)
                 x = random.randrange(w - IMG_SIZE)
-                plt.imsave(join(dir_to_save, 'blurred/') + 'img1_' + str(idx_to_save) + '.png', noised[y : y + IMG_SIZE, x : x + IMG_SIZE])
-                plt.imsave(join(dir_to_save,   'sharp/') + 'img1_' + str(idx_to_save) + '.png', cur_img[y : y + IMG_SIZE, x : x + IMG_SIZE])
+                plt.imsave(join(args.to_save, 'blurred/') + 'img_' + str(idx_to_save) + '.png', noised[y : y + IMG_SIZE, x : x + IMG_SIZE])
+                plt.imsave(join(args.to_save,   'sharp/') + 'img_' + str(idx_to_save) + '.png', cur_img[y : y + IMG_SIZE, x : x + IMG_SIZE])
         return
 
-    except Exception as e: # work on python 2.x
-        print('caught ex', str(e))
+    # except Exception as e: # work on python 2.x
+    #     print('caught ex', str(e))
 
 def wrapper_targetFunc(f, q, dir_to_save, amount_on_picture):
     while True:
@@ -64,7 +66,8 @@ def wrapper_targetFunc(f, q, dir_to_save, amount_on_picture):
         q.task_done()
 
 
-def generate_pics(paths, dir_to_save = './', amount_on_picture = 1):
+def generate_pics(paths, args, amount_on_picture = 1):
+    dir_to_save = args.to_save
     make_directory(dir_to_save)
     make_directory(join(dir_to_save, 'blurred'))
     make_directory(join(dir_to_save, 'sharp'))
@@ -76,13 +79,22 @@ def generate_pics(paths, dir_to_save = './', amount_on_picture = 1):
         q.put_nowait(ptf)
     for _ in range(8):
         threading.Thread(target=wrapper_targetFunc,
-                        args=(process_image, q, dir_to_save, amount_on_picture)).start()
+                        args=(process_image, q, args, amount_on_picture)).start()
     q.join()
+
+def generate_pics_one_thread(paths, args, amount_on_picture = 1):
+    dir_to_save = args.to_save
+    make_directory(dir_to_save)
+    make_directory(join(dir_to_save, 'blurred'))
+    make_directory(join(dir_to_save, 'sharp'))
+    for idx, p in enumerate(paths):
+        process_image(p, idx, args, amount_on_picture)
+
 
 def get_paths(directory):
     fnames = listdir(directory)
     fnames.sort()
-    return list([(directory + item, idx) for (idx, item) in enumerate(fnames)])[:3000]
+    return list([os.path.join(directory, item) for (idx, item) in enumerate(fnames)])[:3000]
     # return np.random.permutation(list([(directory + item, idx) for (idx, item) in enumerate(fnames)])[-20:])
 
 
@@ -91,6 +103,10 @@ def add_parser():
 
     parser.add_argument('dir_to_use', type=str, nargs='?', help='directory from to generate')
     parser.add_argument('to_save',  type=str, nargs='?', help='where to save')
+    parser.add_argument('len',  type=int, default=9, nargs='?', help='length to blur')
+    parser.add_argument('angle',  type=int, default=0, nargs='?', help='angle to blur')
+    parser.add_argument('no_mt', default=False, action='store_true', help='use multithreading')
+    # parser.set_defaults(mt=False)
 
     return parser.parse_args()
 
@@ -102,6 +118,11 @@ if __name__ == '__main__':
     random.seed(1337)
     ###                         ###
 
-    generate_pics(get_paths(args.dir_to_use), args.to_save, 1)
-
+    if (args.no_mt):
+        print('no mt')
+        generate_pics_one_thread(get_paths(args.dir_to_use), args, 1)
+    else:
+        print('mt')
+        generate_pics(get_paths(args.dir_to_use), args, 1)
+        
 

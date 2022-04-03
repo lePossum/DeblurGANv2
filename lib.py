@@ -1,15 +1,15 @@
-from cv2 import rotate
-import matplotlib.pyplot as plt
-import numpy as np
-import scipy.signal as ss
-import gc
 import copy
-from PIL import Image
+# from cv2 import rotate
+import gc
+import matplotlib.pyplot as plt
 import math
-import time
-from skimage.transform import radon
+import numpy as np
 import os
-from scipy import ndimage
+from PIL import Image
+from skimage.transform import radon
+import scipy.signal as ss
+from scipy import ndimage, interpolate
+import time
 
 def make_directory(dirname):
     if (not os.path.exists(dirname)):
@@ -97,27 +97,30 @@ def wiener_filter(img, kernel, K=1):
     return dummy
 
 def get_blur_len(img, angle, weight, w=2):
-    img[img == img.max()] = 0
-    img[img < 0.7 * img.max()] = 0
-    cur_img = FixImage(img)
-    rotated_img = ndimage.rotate(cur_img, -angle * 180/math.pi)
-    blur_len = 0
+    # img[img == img.max()] = 0
+    # img[img < 0.7 * img.max()] = 0
+    # cur_img = FixImage(img)
+    # rotated_img = ndimage.rotate(cur_img, -angle * 180/math.pi)
+    # blur_len = 0
+    # max_val = rotated_img[rotated_img.shape[0] // 2 - w : rotated_img.shape[0] // 2 + w].max(axis=0)
+    # wid = rotated_img.shape[1] // 2
+    # for i in range(wid):
+    #     if (max_val[i] > 0.05):
+    #         blur_len = wid - i
+    #         break
+    rotated_img = ndimage.rotate(img, -angle * 180/math.pi)
+    rotated_img[rotated_img < 4/255 * rotated_img.max()] = 0
     max_val = rotated_img[rotated_img.shape[0] // 2 - w : rotated_img.shape[0] // 2 + w].max(axis=0)
-    wid = rotated_img.shape[1] // 2
-    for i in range(wid):
-        if (max_val[i] > 0.05):
-            blur_len = wid - i
+    r = max_val
+    # r = radon(rotated_img, theta=[90], circle=False)
+    # r[r > 0.6 * r.max()] = 0
+    r *= 1./max(r)
+    for i in range(len(r)):
+        if (r[i] > 0.03):
+            blur_len = len(r) // 2 - 1 - i 
+#             if (blur_len > 2 * img.shape[0] // 5):
+#                 blur_len = 0
             break
-    # rotated_img[rotated_img < 4/255 * rotated_img.max()] = 0
-#     r = radon(rotated_img, theta=[90], circle=False)
-#     r[r > 0.6 * r.max()] = 0
-#     r *= 1./max(r)
-#     for i in range(len(r)):
-#         if (r[i] > 0.7):
-#             blur_len = len(r) // 2 - 1 - i 
-# #             if (blur_len > 2 * img.shape[0] // 5):
-# #                 blur_len = 0
-#             break
     global counter
     plt.imsave('temp/' + str(counter) + 'rotated_ceps.png', rotated_img)
     counter += 1
@@ -194,13 +197,6 @@ def make_ker(ker_len, ker_angle):
     # else:
     #     return ret_value
 
-def get_common_ker_len_angle(kers):
-    max_shape = max([a[0] for a in kers])
-    lenghts = [a[0] for a in kers]
-    angles =  [a[1] for a in kers]
-    
-    return (int(np.median(lenghts)), int(np.median(angles)))
-
 class Cepstrum:
     def __init__(self, picture, batch_size=256, step=0.5, dir_to_save=temp_dir):
         gc.enable()
@@ -213,7 +209,8 @@ class Cepstrum:
         self.picture = copy.deepcopy(picture)
         self.squared_image = [0] * self.x_batches * self.y_batches
         self.MainProcess()
-        plt.imsave(os.path.join(self.dir_to_save, 'orig_img.png'), self.picture, cmap='gray')
+        if (DEBUG):
+            plt.imsave(os.path.join(self.dir_to_save, 'orig_img.png'), self.picture, cmap='gray')
 
     def get_square(self):
         pixel_step = int(self.batch_size * self.step)
@@ -252,9 +249,11 @@ class Cepstrum:
             self.angle_value = 0
             print("Unable to calculate blur lengths")
             return
-        self.blur_len_value, self.angle_value = get_common_ker_len_angle(self.kernels)
+        self.blur_len_value, self.angle_value = self.get_common_ker_len_angle()
         self.kernel_image = make_ker(self.blur_len_value, self.angle_value)
         self.squared_image = np.reshape(self.squared_image, (self.y_batches, self.x_batches, self.batch_size, self.batch_size))
+        if (DEBUG):
+            self.save_vector_field()
         
     def MainProcess(self):
         self.ft_array()
@@ -303,6 +302,9 @@ class Cepstrum:
         out_pict[batch_size//2 :, : batch_size//2] = temp_pict[:]
         return out_pict
     
+    def get_common_ker_len_angle(self):
+        w = self.weight / self.weight.sum()
+        return (int(np.ceil(np.multiply(w, self.blur_len).sum())), int(np.median(self.angle)))
 
     def count_ft(self):
         self.orig_cepstrums = list()
@@ -342,6 +344,35 @@ class Cepstrum:
         for idx, q in enumerate(self.cepstrum_picture):
             self.kernels[idx] = (self.blur_len[idx], self.angle[idx])
             
+    def save_vector_field(self):
+        s = self.angle.shape
+
+        x = np.zeros(s[0] * s[1])
+        y = np.zeros(s[0] * s[1])
+        u = np.zeros(s[0] * s[1])
+        v = np.zeros(s[0] * s[1])
+
+        for idx0 in range(s[0]):
+            for idx1 in range(s[1]):
+                cur_idx = idx0 * s[0] + idx1
+                y[cur_idx] = s[0] - 1 - idx0
+                x[cur_idx] = idx1
+                u[cur_idx] = self.blur_len[idx0][idx1] * np.cos(self.angle[idx0][idx1])
+                v[cur_idx] = -self.blur_len[idx0][idx1] * np.sin(self.angle[idx0][idx1])
+
+        k = 10
+        yy = np.linspace(0, s[0] - 1, k)
+        xx = np.linspace(0, s[1] - 1, k)
+        xx, yy = np.meshgrid(xx, yy)
+
+        points = np.transpose(np.vstack((x, y)))
+        u_interp = interpolate.griddata(points, u, (xx, yy), method='cubic')
+        v_interp = interpolate.griddata(points, v, (xx, yy), method='cubic')
+
+        plt.figure(figsize=(s[0]*2,s[1]*2))
+        plt.quiver(xx, yy, u_interp, v_interp)
+        plt.savefig(os.path.join(self.dir_to_save, 'vector_fielld.png'))
+    
     def restore_function(self, img, kernel):
 #         img /= img.max()
 #         if (np.shape(kernel)[0] == 0):
