@@ -5,6 +5,6 @@ declare -a AngleArray=(10 20 30 40 50)
 for val in ${AngleArray[@]}; do
     # python generate_images.py  "/home/vados/Stuff/Images/val_dataset/"  "/home/vados/Stuff/Images/val/l${val}a00" ${val} 0 
     # echo  /home/vados/Stuff/Images/val/l${val}a00
-    python generate_images.py  "/home/vados/Stuff/Images/val_dataset/"  "/home/vados/Stuff/Images/val/l00a${val}" 9 ${val}
-    echo  /home/vados/Stuff/Images/val/l00a${val}
+    python generate_images.py  "/home/vados/Stuff/Images/val_dataset/"  "/home/vados/Stuff/Images/val/l09a${val}" 9 ${val}
+    echo  /home/vados/Stuff/Images/val/l09a${val}
 done

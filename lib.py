@@ -11,6 +11,9 @@ import scipy.signal as ss
 from scipy import ndimage, interpolate
 import time
 
+tmp = []
+counter = 0
+
 def make_directory(dirname):
     if (not os.path.exists(dirname)):
         os.mkdir(dirname)
@@ -154,7 +157,10 @@ def get_blur_len(img, angle, weight, w=2):
                         l.append((y, q + i))
         p = np.zeros((h, h))
         for t in l:
-            p[t] = weight
+            try:
+                p[t] = weight
+            except Exception as e:
+                print(e)
         return (int(abs(blur_len)), p)
     else:
         return int(abs(blur_len))
@@ -173,6 +179,7 @@ def make_ker(ker_len, ker_angle):
 #     h = ker_len * 2
     h = ker_len
     ker_len = ker_len // 2
+    ker_angle = math.pi/180 * ker_angle
     ker = np.zeros((h, h), dtype='float')
     
     k = -math.tan(ker_angle)
@@ -254,6 +261,7 @@ class Cepstrum:
         self.squared_image = np.reshape(self.squared_image, (self.y_batches, self.x_batches, self.batch_size, self.batch_size))
         if (DEBUG):
             self.save_vector_field()
+        print("Total time: ", time.time() - t)
         
     def MainProcess(self):
         self.ft_array()
@@ -304,7 +312,7 @@ class Cepstrum:
     
     def get_common_ker_len_angle(self):
         w = self.weight / self.weight.sum()
-        return (int(np.ceil(np.multiply(w, self.blur_len).sum())), int(np.median(self.angle)))
+        return (int(np.ceil(np.multiply(w, self.blur_len).sum())), np.median(self.angle))
 
     def count_ft(self):
         self.orig_cepstrums = list()
@@ -358,7 +366,7 @@ class Cepstrum:
                 y[cur_idx] = s[0] - 1 - idx0
                 x[cur_idx] = idx1
                 u[cur_idx] = self.blur_len[idx0][idx1] * np.cos(self.angle[idx0][idx1])
-                v[cur_idx] = -self.blur_len[idx0][idx1] * np.sin(self.angle[idx0][idx1])
+                v[cur_idx] = self.blur_len[idx0][idx1] * np.sin(self.angle[idx0][idx1])
 
         k = 10
         yy = np.linspace(0, s[0] - 1, k)
@@ -385,3 +393,4 @@ class Cepstrum:
         # self.minimis.MainProcess()
         # return self.minimis._cur_image
         pass
+

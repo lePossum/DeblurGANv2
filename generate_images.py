@@ -1,5 +1,6 @@
 from os import listdir
 from os.path import join
+from sqlite3 import paramstyle
 import matplotlib.pyplot as plt
 import argparse
 from matplotlib.pyplot import imread
@@ -10,17 +11,19 @@ from scipy.signal import convolve2d
 from multiprocessing import Pool
 import threading
 import queue
+import pickle
 
 from lib import *
 from metrics import prepare_img1
 
 
 def convolve_img(image, args):
-    # ker_len = args.len
-    # ker_len = random.randint(3, 19)
-    # ker = make_ker(ker_len, 0)
     ker_len = args.len
     ker_angle = args.angle
+
+    ker_len = random.randint(3, 19)
+    ker_angle = random.randint(0, 180)
+
     ker = make_ker(ker_len, ker_angle)
     img = image
     pad = ker_len // 2
@@ -36,12 +39,12 @@ def convolve_img(image, args):
     image = np.stack((r, g, b))
     image = np.clip(image, 0., 1.)
     image = np.transpose(image, axes=(1,2, 0))
-    return image
+    return image, ker_len, ker_angle
 
 def process_image(path, idx_to_save, args, amount_on_picture):
     # try:
         cur_img = prepare_img1(imread(path))
-        blurred = convolve_img(cur_img, args)
+        blurred, ker_len, ker_angle = convolve_img(cur_img, args)
         noised = random_noise(blurred, var=0.0001)
         h, w = cur_img.shape[:2]
 
@@ -49,6 +52,8 @@ def process_image(path, idx_to_save, args, amount_on_picture):
             for idx in range(amount_on_picture):
                 y = random.randrange(h - IMG_SIZE)
                 x = random.randrange(w - IMG_SIZE)
+                global parametres
+                parametres.append((ker_len, ker_angle))
                 plt.imsave(join(args.to_save, 'blurred/') + 'img_' + str(idx_to_save) + '.png', noised[y : y + IMG_SIZE, x : x + IMG_SIZE])
                 plt.imsave(join(args.to_save,   'sharp/') + 'img_' + str(idx_to_save) + '.png', cur_img[y : y + IMG_SIZE, x : x + IMG_SIZE])
         return
@@ -94,7 +99,7 @@ def generate_pics_one_thread(paths, args, amount_on_picture = 1):
 def get_paths(directory):
     fnames = listdir(directory)
     fnames.sort()
-    return list([os.path.join(directory, item) for (idx, item) in enumerate(fnames)])[:3000]
+    return list([os.path.join(directory, item) for (idx, item) in enumerate(fnames)])[:30]
     # return np.random.permutation(list([(directory + item, idx) for (idx, item) in enumerate(fnames)])[-20:])
 
 
@@ -120,7 +125,11 @@ if __name__ == '__main__':
 
     if (args.no_mt):
         print('no mt')
+        parametres = []
         generate_pics_one_thread(get_paths(args.dir_to_use), args, 1)
+            
+        with open('params.pickle', 'wb') as handle:
+            pickle.dump(parametres, handle)
     else:
         print('mt')
         generate_pics(get_paths(args.dir_to_use), args, 1)

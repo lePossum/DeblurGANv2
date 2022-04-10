@@ -1,4 +1,5 @@
 for d in /home/vados/Stuff/Images/val/*; do
-    python predict.py "${d}/blurred/*.png" --weights_path ./cluster_trained/l09_best_fpn.h5   --out_dir "${d}/l09"
+    python predict.py "${d}/blurred/*.png" --weights_path ./cluster_trained/l09_best_fpn_50.h5   --out_dir "${d}/l09_best_fpn_50"
+    python predict.py "${d}/blurred/*.png" --weights_path ./cluster_trained/l09_last_fpn_115.h5   --out_dir "${d}/l09_last_fpn_115"
     python predict.py "${d}/blurred/*.png" --weights_path ./cluster_trained/base_best_fpn.h5   --out_dir "${d}/base"
 done

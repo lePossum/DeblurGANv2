@@ -181,6 +181,6 @@ if __name__ == '__main__':
     datasets = map(config.pop, ('train', 'val'))
     datasets = map(PairedDataset.from_config, datasets)
     train, val = map(get_dataloader, datasets)
-    weights_path='pretrained_models/fpn_inception.h5'
+    weights_path='cluster_trained/base_best_fpn.h5'
     trainer = Trainer(config, train=train, val=val, weights_path=weights_path)
     trainer.train()
