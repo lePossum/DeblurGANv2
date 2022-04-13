@@ -377,7 +377,7 @@ class Cepstrum:
         u_interp = interpolate.griddata(points, u, (xx, yy), method='cubic')
         v_interp = interpolate.griddata(points, v, (xx, yy), method='cubic')
 
-        plt.figure(figsize=(s[0]*2,s[1]*2))
+        plt.figure(figsize=(s[1]*2,s[0]*2))
         plt.quiver(xx, yy, u_interp, v_interp)
         plt.savefig(os.path.join(self.dir_to_save, 'vector_fielld.png'))
     
