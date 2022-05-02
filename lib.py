@@ -211,8 +211,8 @@ class Cepstrum:
         self.step = step
         self.dir_to_save = dir_to_save
         make_directory(dir_to_save)
-        self.x_batches = int(picture.shape[1] // (batch_size * step) - 1)
-        self.y_batches = int(picture.shape[0] // (batch_size * step) - 1)
+        self.x_batches = int(picture.shape[1] // int(batch_size * step) - 1)
+        self.y_batches = int(picture.shape[0] // int(batch_size * step) - 1)
         self.picture = copy.deepcopy(picture)
         self.squared_image = [0] * self.x_batches * self.y_batches
         self.MainProcess()
@@ -224,10 +224,12 @@ class Cepstrum:
         for y in range(self.y_batches):
             for x in range(self.x_batches):
                 square = self.picture[y * pixel_step : y * pixel_step + self.batch_size,
-                                   x * pixel_step : x * pixel_step + self.batch_size]
+                                      x * pixel_step : x * pixel_step + self.batch_size]
                 self.squared_image[y * self.x_batches + x] = square
                 orig_ceps = Cepstrum.calculate_cepstrum(square)
                 self.orig_cepstrums.append(self.swap_quarters(orig_ceps))
+                self.batch_slices.append((y * pixel_step, y * pixel_step + self.batch_size,
+                                          x * pixel_step, x * pixel_step + self.batch_size))
                 yield self.swap_quarters(Cepstrum.get_k_bit_plane(orig_ceps))
 
     def ft_array(self):
@@ -252,6 +254,7 @@ class Cepstrum:
 
         self.angle = self.angle.reshape((self.y_batches, self.x_batches))
         self.blur_len = self.blur_len.reshape((self.y_batches, self.x_batches))
+        self.batch_slices = np.array(self.batch_slices).reshape((self.y_batches, self.x_batches, len(self.batch_slices[0])))
         if (np.max(self.blur_len) == 0) :
             self.angle_value = 0
             print("Unable to calculate blur lengths")
@@ -266,7 +269,7 @@ class Cepstrum:
     def MainProcess(self):
         self.ft_array()
         try:
-            temp2 =[ 0 ] * self.y_squares
+            temp2 = [ 0 ] * self.y_squares
             for y in range(self.y_squares):
                 temp2[y] = np.hstack(self.restored_image[y, :, :, :])
             self.restored_image_full = np.vstack(temp2)
@@ -316,6 +319,7 @@ class Cepstrum:
 
     def count_ft(self):
         self.orig_cepstrums = list()
+        self.batch_slices = []
         self.cepstrum_picture = np.array(list(self.get_square()))
         self.conc_cepstrum_picture = self.cepstrum_picture.reshape((self.y_batches, self.x_batches, self.batch_size, self.batch_size))
         temp  = [ 0 ] * self.y_batches
@@ -351,10 +355,30 @@ class Cepstrum:
         self.kernels = [0] * self.y_batches * self.x_batches
         for idx, q in enumerate(self.cepstrum_picture):
             self.kernels[idx] = (self.blur_len[idx], self.angle[idx])
-            
-    def save_vector_field(self):
-        s = self.angle.shape
+    
+    def make_pixel_map(self):
+        self.pixel_map = [0] * self.picture.shape[0]
+        for i in range(self.picture.shape[0]):
+            self.pixel_map[i] = [[]] * self.picture.shape[1]
 
+        for yb in range(self.y_batches):
+            for xb in range(self.x_batches):
+                cur_slice = self.batch_slices[yb][xb]
+                for y in range(cur_slice[0], cur_slice[1]):
+                    for x in range(cur_slice[2], cur_slice[3]):
+                        self.pixel_map[y][x].append((self.blur_len[yb][xb], self.angle[yb][xb]))
+        
+        for y in range(self.picture.shape[0]):
+            for x in range(self.picture.shape[1]):
+                lengths = [a[0] for a in self.pixel_map[y][x]]
+                angles  = [a[1] for a in self.pixel_map[y][x]]
+                self.pixel_map[y][x] = (np.mean(lengths) if len(lengths) > 0 else 0, np.mean(angles) if len(angles) > 0 else 0)
+
+    def save_vector_field(self):
+        self.make_pixel_map()
+
+        # s = self.angle.shape
+        s = self.picture.shape
         x = np.zeros(s[0] * s[1])
         y = np.zeros(s[0] * s[1])
         u = np.zeros(s[0] * s[1])
@@ -362,11 +386,13 @@ class Cepstrum:
 
         for idx0 in range(s[0]):
             for idx1 in range(s[1]):
-                cur_idx = idx0 * s[0] + idx1
+                cur_idx = idx0 * s[1] + idx1
                 y[cur_idx] = s[0] - 1 - idx0
                 x[cur_idx] = idx1
-                u[cur_idx] = self.blur_len[idx0][idx1] * np.cos(self.angle[idx0][idx1])
-                v[cur_idx] = self.blur_len[idx0][idx1] * np.sin(self.angle[idx0][idx1])
+                # u[cur_idx] = self.blur_len[idx0][idx1] * np.cos(self.angle[idx0][idx1])
+                # v[cur_idx] = self.blur_len[idx0][idx1] * np.sin(self.angle[idx0][idx1])
+                u[cur_idx] = self.pixel_map[idx0][idx1][0] * np.cos(self.pixel_map[idx0][idx1][1])
+                v[cur_idx] = self.pixel_map[idx0][idx1][0] * np.sin(self.pixel_map[idx0][idx1][1])
 
         k = 10
         yy = np.linspace(0, s[0] - 1, k)
@@ -377,20 +403,8 @@ class Cepstrum:
         u_interp = interpolate.griddata(points, u, (xx, yy), method='cubic')
         v_interp = interpolate.griddata(points, v, (xx, yy), method='cubic')
 
-        plt.figure(figsize=(s[1]*2,s[0]*2))
+        m = s[0] / s[1]
+        l = 15
+        plt.figure(figsize=(15, 15 * m))
         plt.quiver(xx, yy, u_interp, v_interp)
         plt.savefig(os.path.join(self.dir_to_save, 'vector_fielld.png'))
-    
-    def restore_function(self, img, kernel):
-#         img /= img.max()
-#         if (np.shape(kernel)[0] == 0):
-#             return img
-#         self.z_0 = np.zeros(img.shape)
-#         return momentum_method(self.z_0, 0.85, kernel, img)
-#         return wiener_filter(img, kernel)    
-        # betas = [0.01/math.sqrt(i) for i in range(1, 60)]
-        # self.minimis = FunctionalMinimisation(img, kernel, betas)
-        # self.minimis.MainProcess()
-        # return self.minimis._cur_image
-        pass
-
