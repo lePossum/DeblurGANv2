@@ -125,9 +125,9 @@ def get_blur_len(img, angle, weight, w=2):
 #                 blur_len = 0
             break
     global counter
-    plt.imsave('temp/' + str(counter) + 'rotated_ceps.png', rotated_img)
-    counter += 1
     if (DEBUG):
+        plt.imsave('temp/' + str(counter) + 'rotated_ceps.png', rotated_img)
+        counter += 1
         h = img.shape[0]
         q = h // 2 - 1
         k = -math.tan(angle)
@@ -211,8 +211,9 @@ class Cepstrum:
         self.step = step
         self.dir_to_save = dir_to_save
         make_directory(dir_to_save)
-        self.x_batches = int(picture.shape[1] // int(batch_size * step) - 1)
-        self.y_batches = int(picture.shape[0] // int(batch_size * step) - 1)
+        self.x_batches = int(picture.shape[1] // int(batch_size * step))
+        self.y_batches = int(picture.shape[0] // int(batch_size * step))
+        self.pixel_step = int(self.batch_size * self.step)
         self.picture = copy.deepcopy(picture)
         self.squared_image = [0] * self.x_batches * self.y_batches
         self.MainProcess()
@@ -220,16 +221,24 @@ class Cepstrum:
             plt.imsave(os.path.join(self.dir_to_save, 'orig_img.png'), self.picture, cmap='gray')
 
     def get_square(self):
-        pixel_step = int(self.batch_size * self.step)
+        pixel_step = self.pixel_step
         for y in range(self.y_batches):
             for x in range(self.x_batches):
-                square = self.picture[y * pixel_step : y * pixel_step + self.batch_size,
-                                      x * pixel_step : x * pixel_step + self.batch_size]
+                y0 = y * pixel_step
+                y1 = y * pixel_step + self.batch_size
+                x0 = x * pixel_step
+                x1 = x * pixel_step + self.batch_size
+                if (y1 > self.picture.shape[0]):
+                    y1 = self.picture.shape[0]
+                    y0 = y1 - self.batch_size
+                if (x1 > self.picture.shape[1]):
+                    x1 = self.picture.shape[1]
+                    x0 = x1 - self.batch_size  
+                square = self.picture[y0 : y1, x0 : x1]
                 self.squared_image[y * self.x_batches + x] = square
                 orig_ceps = Cepstrum.calculate_cepstrum(square)
                 self.orig_cepstrums.append(self.swap_quarters(orig_ceps))
-                self.batch_slices.append((y * pixel_step, y * pixel_step + self.batch_size,
-                                          x * pixel_step, x * pixel_step + self.batch_size))
+                self.batch_slices.append((y0, y1, x0, x1))
                 yield self.swap_quarters(Cepstrum.get_k_bit_plane(orig_ceps))
 
     def ft_array(self):
@@ -262,8 +271,8 @@ class Cepstrum:
         self.blur_len_value, self.angle_value = self.get_common_ker_len_angle()
         self.kernel_image = make_ker(self.blur_len_value, self.angle_value)
         self.squared_image = np.reshape(self.squared_image, (self.y_batches, self.x_batches, self.batch_size, self.batch_size))
-        if (DEBUG):
-            self.save_vector_field()
+        # if (DEBUG):
+        self.save_vector_field()
         print("Total time: ", time.time() - t)
         
     def MainProcess(self):
